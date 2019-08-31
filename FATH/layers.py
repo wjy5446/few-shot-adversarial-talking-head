@@ -170,6 +170,12 @@ def avg_pooling(x):
 def max_pooling(x):
     return tf.layers.max_pooling2d(x, pool_size=2, strides=2, padding='SAME')
 
+def global_avg_pooling(x):
+    return tf.reduce_mean(x, axis=[1, 2])
+
+def global_sum_pooling(x):
+    return tf.reduce_sum(x, axis=[1, 2])
+
 def up_sampling_nn(x, scale_factor=2):
     # x (B, H, W, C)
     _, h, w, _ = x.get_shape().as_list()
