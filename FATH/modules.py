@@ -3,26 +3,27 @@ from layers import *
 import tensorflow as tf
 
 
-def ResBlock_adaIN(x, psi, channels, use_bias=True, sn=False, scope='resblock'):
+def ResBlock_adaIN(x, style_mean, style_std, channels, use_bias=True, sn=True, scope='resblock'):
     with tf.variable_scope(scope):
         # x (B, H, W, C)
-        # psi (B, psi_C)
+        # style_mean (B, C)
+        # style_std (B, C)
         
         x_init = x
         with tf.variable_scope('res0'):
-            out = adaIN(x, psi)
+            out = adaIN(x, style_mean=style_mean, style_std=style_std)
             out = relu(out)
             out = conv(x, channels, 3, 1, 1, pad_type='reflect', use_bias=use_bias, sn=sn)
         
         with tf.variable_scope('res1'):
-            out = adaIN(out, psi)
+            out = adaIN(out, style_mean=style_mean, style_std=style_std)
             out = relu(out)
             out = conv(out, channels, 3, 1, 1, pad_type='reflect', use_bias=use_bias, sn=sn)
        
         print(out)
         return out + x_init
 
-def ResBlockDown_g(x, channels, use_bias=True, sn=False, is_training=True, scope='resblock_down_g'): 
+def ResBlockDown_g(x, channels, use_bias=True, sn=True, is_training=True, scope='resblock_down_g'): 
     with tf.variable_scope(scope):
         # x (B, H, W, C)
 
@@ -45,7 +46,7 @@ def ResBlockDown_g(x, channels, use_bias=True, sn=False, is_training=True, scope
         print(out_l)
         return out_r + out_l
 
-def ResBlockDown_d(x, channels, use_bias=True, sn=False, scope='resblock_down_d'):
+def ResBlockDown_d(x, channels, use_bias=True, sn=True, scope='resblock_down_d'):
     with tf.variable_scope(scope):
         # x (B, H, W, C)
 
@@ -66,19 +67,20 @@ def ResBlockDown_d(x, channels, use_bias=True, sn=False, scope='resblock_down_d'
         print(out_l)
         return out_r + out_l
 
-def ResBlockUp_adaIN(x, psi, channels, use_bias=True, sn=False, scope='resblock_up'): 
+def ResBlockUp_adaIN(x, style_mean, style_std, channels, use_bias=True, sn=True, scope='resblock_up'): 
     with tf.variable_scope(scope):
         # x (B, H, W, C)
-        # psi (B, C_psi)
+        # style_mean (B, C)
+        # style_std (B, C)
 
         with tf.variable_scope('res0_r'):
-            out_r = adaIN(x, psi)
+            out_r = adaIN(x, style_mean=style_mean, style_std=style_std)
             out_r = relu(out_r)
             out_r = up_sampling_nn(out_r)
             out_r = conv(out_r, channels, kernel=3, stride=1, pad=1, pad_type='reflect', use_bias=use_bias, sn=sn)
 
         with tf.variable_scope('res1_r'):
-            out_r = adaIN(out_r, psi)
+            out_r = adaIN(out_r, style_mean=style_mean, style_std=style_std)
             out_r = relu(out_r) 
             out_r = conv(out_r, channels, kernel=3, stride=1, pad=1, pad_type='reflect', use_bias=use_bias, sn=sn)
         
@@ -116,38 +118,40 @@ def SelfAttention(x, sn=True, scope='attention'):
         return gamma * out + x 
 
 
-def adaIN(x, psi, eps=1e-5, scope='adain'):
+def adaIN(x, style_mean, style_std, eps=1e-5, scope='adain'):
     with tf.variable_scope(scope):
         # x (B, H, W, C)
-        # psi (B, psi_C)
-
+        # psi = [style_mean, style_std]
+        # style_mean (B, C)
+        # style_std (B, C)
+        
+        B, _, _, C = x.get_shape().as_list()
         # instance normalization (x-u(x)) / sigma(x)
         mean = tf.reduce_mean(x, [1, 2], keepdims=True)
         var_inv = tf.rsqrt(tf.reduce_mean(x - mean, axis=[1, 2], keepdims=True) + eps)
         x = (x - mean) * var_inv
         
-
         # denormalization
         # x (B, 1, 1, C)
-        channel = x.shape[-1] * 2 # channel (C * 2)
-        
-        style = fc(psi, channel) # style (B, C*2)
-        style= tf.reshape(style, [-1, 2, 1, 1, x.shape[-1]]) # style (B ,2, 1, 1, C)
-
-        gamma = style[:, 0] # gamma (B, 1, 1, C)
-        beta = style[:, 1] # beta (B, 1, 1, C)
-
+        gamma = tf.reshape(style_mean, [B, 1, 1, C]) # gamma (B, 1, 1, C)
+        beta = tf.reshape(style_std, [B, 1, 1, C]) # beta (B, 1, 1, C)
+        print(gamma)
+        print(beta)
         return gamma * x + beta
 
 
 if __name__ == '__main__':
-    x = tf.random.normal([4, 6, 6, 8])
+    x = tf.random.normal([4, 6, 6, 512])
     psi = tf.random.normal([4, 512])
 
+
     x_shape = x.get_shape() 
+
+    print('[INFO] adaIN')
+    adaIN(x, psi, psi)
     
     print('[Info] resblock adaIN')
-    ResBlock_adaIN(x, psi, x_shape[-1])
+    ResBlock_adaIN(x, psi, psi, x_shape[-1])
     
     print('[Info] resblock down for generator')
     ResBlockDown_g(x, x_shape[-1])
@@ -156,7 +160,7 @@ if __name__ == '__main__':
     ResBlockDown_d(x, x_shape[-1])
     
     print('[Info] resblock up')
-    ResBlockUp_adaIN(x, psi, x_shape[-1])
+    ResBlockUp_adaIN(x, psi, psi, x_shape[-1])
     
     print('[Info] self-attention')
     SelfAttention(x)
