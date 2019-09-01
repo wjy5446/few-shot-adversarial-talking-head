@@ -1,17 +1,52 @@
 from collections import OrderedDict
 import tensorflow as tf
 
+from keras.applications.vgg19 import preprocess_input
+from keras_vggface.vggface import VGGFace
+
 from layers import *
+from loss import *
 from modules import *
+
 
 class FATH(object):
     def __init__(self, sess=None, args=None):
         self.n_video = 10
 
+
     def __call__(self, ):
         pass
 
-    def embedder(self, x, y, is_training=True, reuse=False):
+    def build_model(self):
+        
+        self.embedder = Embedder('embedder')
+        self.generator = Generator('generator')
+        self.discriminator = Discriminator('discriminator')
+        self.vgg = Vgg19()
+        self.vggface = VggFace()
+        pass
+
+    def train(self):
+        pass
+    
+    def test(self):
+        pass
+
+    def load(self, checkpoint_dir):
+        pass
+
+    def visualize_result(self, epoch):
+        pass
+
+################################################
+# Embedder
+################################################
+
+class Embedder:
+    def __init__(self, name):
+        self.name = name
+
+    def __call__(self, x, y, is_training=True, reuse=False):
         # x (B, 256, 256, 3)
         # y (B, 256, 256, 3)
         with tf.variable_scope('embedder', reuse=reuse): 
@@ -31,10 +66,17 @@ class FATH(object):
 
             out = tf.squeeze(global_sum_pooling(out)) # out (B, 512)
             out = relu(out) # out (B, 512)
-            print(out)
             return out
 
-    def generator(self, y, e, is_training=True, reuse=False):
+################################################
+# Generator
+################################################
+
+class Generator:
+    def __init__(self, name):
+        self.name = name
+
+    def __call__(self, y, e, is_training=True, reuse=False):
         # y (B, 256, 256, 3)
         # e (B, 512)
         
@@ -104,7 +146,7 @@ class FATH(object):
                 back_style = (tf.slice(e_psi, [0, style_info[(4*i)+2][0]], [-1, style_info[(4*i)+2][1]]), 
                               tf.slice(e_psi, [0, style_info[(4*i)+3][0]], [-1, style_info[(4*i)+3][1]]))
                 
-                out = ResBlock_adaIN(out, front_style, back_style, 512, scope='resblock_' + str(i))
+                out = ResBlock_adaIa(out, front_style, back_style, 512, scope='resblock_' + str(i))
                 print(front_style, back_style)
                 print(out)
            
@@ -139,8 +181,15 @@ class FATH(object):
             
             return out 
 
+################################################
+# Discriminator
+################################################
 
-    def discriminator(self, x, y, idx, is_training=True, reuse=False):
+class Discriminator:
+    def __init__(self, name):
+        self.name = name
+
+    def __call__(self, x, y, idx, is_training=True, reuse=False): 
         # x (B, 256, 256, 3)
         # y (B, 256, 256, 3)
         # idx (B)
@@ -186,21 +235,91 @@ class FATH(object):
                 out = tf.squeeze(out)
                 return out, interm_feature 
 
-    def build_model(self):
-        pass
 
-    def train(self):
-        pass
-    
-    def test(self):
-        pass
-        pass
+################################################
+# VGG19
+################################################
 
-    def load(self, checkpoint_dir):
-        pass
+class Vgg19(tf.keras.Model):
+    def __init__(self, trainable=False):
+        super(Vgg19, self).__init__(name='Vgg19')
+        vgg_pretrained_features = tf.keras.applications.vgg19.VGG19(weights='imagenet', include_top=False)
 
-    def visualize_result(self, epoch):
-        pass
+        if trainable is False:
+            vgg_pretrained_features.trainable = False
+
+        vgg_pretrained_features = vgg_pretrained_features.layers
+        print(len(vgg_pretrained_features))
+        
+        self.slice1 = tf.keras.Sequential()
+        self.slice2 = tf.keras.Sequential()
+        self.slice3 = tf.keras.Sequential()
+        self.slice4 = tf.keras.Sequential()
+        self.slice5 = tf.keras.Sequential()
+       
+        for x in range(1, 2):
+            self.slice1.add(vgg_pretrained_features[x]) 
+        for x in range(2, 5):
+            self.slice2.add(vgg_pretrained_features[x])
+        for x in range(5, 8):
+            self.slice3.add(vgg_pretrained_features[x])
+        for x in range(8, 13):
+            self.slice4.add(vgg_pretrained_features[x])
+        for x in range(13, 18):
+            self.slice5.add(vgg_pretrained_features[x])
+                
+    def call(self, x):
+        h_relu1 = self.slice1(x)
+        h_relu2 = self.slice2(h_relu1)
+        h_relu3 = self.slice3(h_relu2)
+        h_relu4 = self.slice4(h_relu3)
+        h_relu5 = self.slice5(h_relu4)
+        out = [h_relu1, h_relu2, h_relu3, h_relu4, h_relu5]
+         
+        return out
+
+
+################################################
+# VGGFace
+################################################
+
+class VggFace(tf.keras.Model):
+    def __init__(self, trainable=False):
+        super(VggFace, self).__init__(name='VggFace')
+        vgg_pretrained_features = VGGFace(include_top=False, input_shape=[224, 224, 3], pooling='avg')
+        
+        if trainable is False:
+            vgg_pretrained_features.trainable = False
+        
+        vgg_pretrained_features = vgg_pretrained_features.layers
+        print(vgg_pretrained_features)
+        
+        self.slice1 = tf.keras.Sequential()
+        self.slice2 = tf.keras.Sequential()
+        self.slice3 = tf.keras.Sequential()
+        self.slice4 = tf.keras.Sequential()
+        self.slice5 = tf.keras.Sequential()
+
+        for x in range(1, 2):
+            self.slice1.add(vgg_pretrained_features[x])
+        for x in range(2, 5):
+            self.slice2.add(vgg_pretrained_features[x])
+        for x in range(5, 8):
+            self.slice3.add(vgg_pretrained_features[x])
+        for x in range(8, 12):
+            self.slice4.add(vgg_pretrained_features[x])
+        for x in range(12, 16):
+            self.slice5.add(vgg_pretrained_features[x])
+
+    def call(self, x):
+        h_relu1 = self.slice1(x)
+        h_relu2 = self.slice2(h_relu1)
+        h_relu3 = self.slice3(h_relu2)
+        h_relu4 = self.slice4(h_relu3)
+        h_relu5 = self.slice5(h_relu4)
+        out = [h_relu1, h_relu2, h_relu3, h_relu4, h_relu5]
+         
+        return out
 
 if __name__ == '__main__':
     x = tf.random_normal([4, 256, 256, 3])
