@@ -3,7 +3,7 @@ from layers import *
 import tensorflow as tf
 
 
-def ResBlock_adaIN(x, style_front, style_back, channels, use_bias=True, sn=True, scope='resblock'):
+def ResBlock_adaIN(x, style_front, style_back, channels, use_bias=True, sn=True, scope='resblock_adain'):
     with tf.variable_scope(scope):
         # x (B, H, W, C)
         # style front (style_mean, style_std)
@@ -16,6 +16,22 @@ def ResBlock_adaIN(x, style_front, style_back, channels, use_bias=True, sn=True,
         
         with tf.variable_scope('res1'):
             out = adaIN(out, style_mean=style_back[0], style_std=style_back[1])
+            out = relu(out)
+            out = conv(out, channels, 3, 1, 1, pad_type='reflect', use_bias=use_bias, sn=sn)
+       
+        return out + x_init
+
+def ResBlock(x, channels, use_bias=True, sn=True, is_training=True, scope='resblock'):
+    with tf.variable_scope(scope):
+        # x (B, H, W, C)
+        x_init = x
+        with tf.variable_scope('res0'):
+            out = instance_norm(x, is_training=is_training)
+            out = relu(out)
+            out = conv(x, channels, 3, 1, 1, pad_type='reflect', use_bias=use_bias, sn=sn)
+        
+        with tf.variable_scope('res1'):
+            out = instance_norm(out, is_training=is_training)
             out = relu(out)
             out = conv(out, channels, 3, 1, 1, pad_type='reflect', use_bias=use_bias, sn=sn)
        
