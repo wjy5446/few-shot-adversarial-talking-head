@@ -39,6 +39,9 @@ def LossMatch(e, W, idx, weight_mch=80):
 #########################
 
 def LossD(real_score, fake_score):
+    real_score = tf.reduce_mean(real_score)
+    fake_score = tf.reduce_mean(fake_score)
+    
     return (relu(1 + fake_score) + relu(1 - real_score))
 
 if __name__ == "__main__":
