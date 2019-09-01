@@ -119,6 +119,9 @@ def relu(x):
 def tanh(x):
     return tf.nn.tanh(x)
 
+def sigmoid(x):
+    return tf.nn.sigmoid(x)
+
 ########################################
 # Normalization fucntion 
 ########################################
