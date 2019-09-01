@@ -6,7 +6,7 @@ from modules import *
 
 class FATH(object):
     def __init__(self, sess=None, args=None):
-        pass
+        self.n_video = 10
 
     def __call__(self, ):
         pass
@@ -140,8 +140,51 @@ class FATH(object):
             return out 
 
 
-    def discriminator(self, x, reuse=False):
-        pass
+    def discriminator(self, x, y, idx, is_training=True, reuse=False):
+        # x (B, 256, 256, 3)
+        # y (B, 256, 256, 3)
+        # idx (B)
+
+        with tf.variable_scope('discriminator', reuse=reuse):
+            with tf.variable_scope('conv_part', reuse=reuse):
+                out = tf.concat([x, y], -1)
+                print(out)
+                
+                ch = 64
+                interm_feature = []
+                for i in range(0, 3):
+                    out = ResBlockDown_d(out, ch, scope='resblock_down_front_' + str(i))
+                    interm_feature.append(out)
+                    ch = ch * 2
+                    print(out)
+
+                out = SelfAttention(out)
+                print(out)
+                
+                for i in range(0, 3):
+                    out = ResBlockDown_d(out, 512, scope='resblock_down_back_' + str(i))
+                    interm_feature.append(out)
+                    print(out)
+
+                out = ResBlock(out, 512, scope='resblock')
+
+                out = global_sum_pooling(out) # out (B, 512)
+                out = relu(out) 
+                out = tf.expand_dims(out, 1) 
+                print(out)
+
+            with tf.variable_scope('projection', reuse=reuse):
+                W = tf.get_variable('W', [self.n_video, 512], dtype=tf.float32, initializer=tf.random_normal_initializer())
+                w0 = tf.get_variable('w0', shape=[1, 512], dtype=tf.float32, initializer=tf.random_normal_initializer())
+                b = tf.get_variable('b', shape=[1], dtype=tf.float32, initializer=tf.constant_initializer(0.0))
+                
+                W_i = tf.gather(W, idx)
+                W = tf.expand_dims(W_i + w0, 2)
+               
+                out = tf.matmul(out, W) + b # out (B)
+                out = sigmoid(out)
+                out = tf.squeeze(out)
+                return out, interm_feature 
 
     def build_model(self):
         pass
@@ -151,8 +194,6 @@ class FATH(object):
     
     def test(self):
         pass
-
-    def save(self, checkpoint_dir, step):
         pass
 
     def load(self, checkpoint_dir):
@@ -164,11 +205,15 @@ class FATH(object):
 if __name__ == '__main__':
     x = tf.random_normal([4, 256, 256, 3])
     y = tf.random_normal([4, 256, 256, 3])
-    
+    i = [0, 1, 2, 3]   
+
     fath = FATH()
     
     print("[INFO] embedder")
-    e = fath.embedder(x, y)
+    #e = fath.embedder(x, y)
    
     print("[INFO] generator")
-    fath.generator(y, e)
+    #fath.generator(y, e)
+
+    print("[INFO] discriminator")
+    fath.discriminator(x, y, i)
