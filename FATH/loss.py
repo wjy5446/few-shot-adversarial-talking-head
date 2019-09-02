@@ -2,12 +2,13 @@ import tensorflow as tf
 from keras.applications.vgg19 import preprocess_input
 from keras_vggface.vggface import VGGFace
 
+from layers import *
+
 #########################
 # Generator Loss
 #########################
 
 def LossCnt(real, fake, vgg, vggface, weight_vgg=0.01, weight_vggface=0.001):
-
     list_real_vgg, list_fake_vgg = vgg(real), vgg(fake)
     list_real_vggface, list_fake_vggface = vggface(real), vggface(fake)
 
@@ -18,6 +19,7 @@ def LossCnt(real, fake, vgg, vggface, weight_vgg=0.01, weight_vggface=0.001):
     loss_vggface = 0
     for real_vggface, fake_vggface in zip(list_real_vggface, list_fake_vggface):
         loss_vggface += tf.reduce_mean(tf.abs(real_vggface - fake_vggface))
+    
 
     return (weight_vgg * loss_vgg) + (weight_vggface * loss_vggface)
 
@@ -31,7 +33,6 @@ def LossAdv(fake_score, list_real_FM, list_fake_FM, weight_FM=10):
 
 def LossMatch(e, W, idx, weight_mch=80):
     W_i = tf.gather(W, idx)
-
     return tf.reduce_mean(tf.abs(e - W_i)) * weight_mch
 
 #########################
