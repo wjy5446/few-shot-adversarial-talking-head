@@ -75,7 +75,7 @@ def conv(x, channels, kernel, stride, pad, pad_type='zero', use_bias=True, sn=Fa
         return x
 
 
-def deconv(x, channels, kernel=4, stride=2, pad_type='same', use_bias=True, sn=False, scope='deconv'):
+def deconv(x, channels, kernel=4, stride=2, pad_type='SAME', use_bias=True, sn=True, scope='deconv'):
     """
     make deconvolution layer with xvaier_initializer() and spectral_normalization
     """
@@ -83,7 +83,7 @@ def deconv(x, channels, kernel=4, stride=2, pad_type='same', use_bias=True, sn=F
     with tf.variable_scope(scope):
         x_shape = x.get_shape().as_list()
         
-        if pad_type == 'same':
+        if pad_type == 'SAME':
             output_shape = [x_shape[0], x_shape[1] * stride, x_shape[2] * stride, channels]
         else:
             output_shape = [x_shape[0], x_shape[1] * stride + max(kernel - stride, 0),
@@ -92,9 +92,11 @@ def deconv(x, channels, kernel=4, stride=2, pad_type='same', use_bias=True, sn=F
         if sn:
             w = tf.get_variable('kernel', shape=[kernel, kernel, channels, x.get_shape()[-1]],
                                 initializer=tf_contrib.layers.xavier_initializer())
-
+            
+            print(spectral_norm(w))
+            print([1, stride, stride, 1])
             x = tf.nn.conv2d_transpose(input=x, filter=spectral_norm(w), output_shape=output_shape,
-                             strides=[1, stride, stride, 1], padding=padding)
+                                       strides=[1, stride, stride, 1], padding=pad_type)
 
             if use_bias:
                 b = tf.get_variable('bias', [channels], initializer=tf.constant_initializer(0.0))
